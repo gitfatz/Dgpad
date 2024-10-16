@@ -1,0 +1,53 @@
+import stanza
+import spacy_stanza
+from pymongo import MongoClient
+
+# Initialize MongoDB connection
+mongo_client = MongoClient("mongodb://localhost:27017/")
+database = mongo_client["newdatanow"]
+articles_collection = database["newarticles"]
+
+# Download the Arabic language model for stanza
+stanza.download('ar')
+
+# Initialize stanza NLP pipeline for Arabic language
+nlp_pipeline = stanza.Pipeline('ar')
+
+# Function to extract named entities from text
+def extract_entities(text_content):
+    processed_doc = nlp_pipeline(text_content)
+    entity_list = []
+
+    # Append each entity found in the text
+    for entity in processed_doc.ents:
+        entity_list.append({
+            "entity_name": entity.text,
+            "entity_type": entity.type
+        })
+
+    # Debugging: print entities found for each document
+    print(f"Extracted Entities: {entity_list}")
+    return entity_list
+
+# Counter to track the number of articles processed
+article_count = 0
+
+# Loop through each article in the MongoDB collection
+for article in articles_collection.find():
+    article_count += 1
+    print(f"Processing Article {article_count}: {article.get('title')}")
+
+    # Check if entities have already been extracted
+    entity_data = article.get("entities", "")
+    
+    if not entity_data:  # If no entities are present, extract them
+        article_text = article.get("full_text", "")
+        
+        # Extract entities from the article's full text
+        extracted_entities = extract_entities(article_text)
+        
+        # Update MongoDB with the extracted entities
+        articles_collection.update_one(
+            {"_id": article["_id"]},
+            {"$set": {"entities": extracted_entities}}
+        )
