@@ -1,0 +1,40 @@
+from textblob import TextBlob
+from pymongo import MongoClient
+
+# Establish a connection to the MongoDB server
+mongo_client = MongoClient("mongodb://localhost:27017/")
+database = mongo_client["newdatanow"]
+articles_collection = database["newsarticles"]
+
+# Function to perform sentiment analysis
+def sentiment_analysis(content):
+    analysis = TextBlob(content)
+    sentiment_score = analysis.sentiment.polarity
+
+    # Determine sentiment based on polarity score
+    if sentiment_score > 0:
+        sentiment_label = "Positive"
+    elif sentiment_score < 0:
+        sentiment_label = "Negative"
+    else:
+        sentiment_label = "Neutral"
+    
+    return sentiment_label, sentiment_score
+
+# Loop through each document in the MongoDB collection
+for article in articles_collection.find():
+    article_text = article.get("full_text", "")
+    
+    # Call the sentiment analysis function
+    sentiment, polarity_value = sentiment_analysis(article_text)
+    
+    print(f"Article Title: {article.get('title')} - Sentiment: {sentiment}")
+
+    # Update the document with sentiment analysis results
+    articles_collection.update_one(
+        {"_id": article["_id"]},
+        {"$set": {
+            "sentiment_label": sentiment,
+            "polarity_value": polarity_value
+        }}
+    )
